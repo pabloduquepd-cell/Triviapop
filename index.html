@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Balloon Pop Trivia</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <button id="homeButton" class="brand-button" type="button">
+        <span class="brand-mark">BP</span>
+        <span>
+          <strong>Balloon Pop Trivia</strong>
+          <small>Church nights, youth groups, and party rooms</small>
+        </span>
+      </button>
+      <div class="sound-panel">
+        <button id="soundToggle" class="icon-btn" type="button" title="Sound on">S</button>
+        <select id="musicThemeSelect" class="audio-select" title="Background music">
+          <option value="off">Music Off</option>
+          <option value="celebration">Celebration</option>
+          <option value="arcade">Arcade</option>
+          <option value="chill">Chill</option>
+        </select>
+        <select id="popStyleSelect" class="audio-select" title="Pop sound">
+          <option value="classic">Classic Pop</option>
+          <option value="soft">Soft Pop</option>
+          <option value="spark">Spark Pop</option>
+        </select>
+        <label class="icon-btn music-upload" title="Upload music">
+          <input id="musicUpload" type="file" accept="audio/*">
+          <span>M</span>
+        </label>
+      </div>
+    </header>
+
+    <section id="landingView" class="landing-view">
+      <div class="floating-balloons" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="hero-copy">
+        <p class="eyebrow">Fast hands. Smart answers.</p>
+        <h1>Pop the balloons first. Earn the question.</h1>
+        <p class="lede">Create a room, invite players, race through the balloon board, then answer Bible or general trivia for points.</p>
+      </div>
+
+      <div class="panel action-panel">
+        <button id="hostModeButton" class="primary-action" type="button">Host a Game</button>
+        <button id="joinModeButton" class="secondary-action" type="button">Join a Game</button>
+      </div>
+    </section>
+
+    <section id="hostSetupView" class="setup-grid hidden">
+      <div class="panel setup-panel">
+        <p class="eyebrow">Host Setup</p>
+        <h2>Create the room</h2>
+
+        <label class="field">
+          <span>Question category</span>
+          <select id="categorySelect"></select>
+        </label>
+
+        <label class="field">
+          <span>Difficulty</span>
+          <select id="difficultySelect">
+            <option value="easy">Easy - 1 to 2 runner balloons</option>
+            <option value="medium" selected>Medium - 2 to 4 runner balloons</option>
+            <option value="hard">Hard - 4 to 5 runner balloons</option>
+          </select>
+        </label>
+
+        <div class="settings-row">
+          <label class="field compact">
+            <span>Balloons</span>
+            <input id="balloonCount" type="number" min="6" max="24" value="12">
+          </label>
+          <label class="field compact">
+            <span>Rounds</span>
+            <input id="roundLimit" type="number" min="1" max="10" value="5">
+          </label>
+        </div>
+
+        <div id="difficultyHint" class="rule-card"></div>
+
+        <button id="createRoomButton" class="primary-action" type="button">Create Room</button>
+      </div>
+
+      <div class="panel category-panel">
+        <p class="eyebrow">Included Packs</p>
+        <h2>Categories</h2>
+        <div id="categoryChips" class="chip-grid"></div>
+      </div>
+    </section>
+
+    <section id="joinView" class="join-view hidden">
+      <div class="panel join-card">
+        <p class="eyebrow">Player Join</p>
+        <h2>Enter your room</h2>
+        <label class="field">
+          <span>Room code</span>
+          <input id="joinCodeInput" type="text" maxlength="6" placeholder="ABCD">
+        </label>
+        <label class="field">
+          <span>Your name</span>
+          <input id="playerNameInput" type="text" maxlength="24" placeholder="Your name">
+        </label>
+        <button id="joinRoomButton" class="primary-action" type="button">Join Room</button>
+        <p id="joinError" class="form-error"></p>
+      </div>
+    </section>
+
+    <section id="hostRoomView" class="host-room hidden">
+      <aside class="panel room-panel">
+        <p class="eyebrow">Room Code</p>
+        <div id="roomCodeDisplay" class="room-code">---- </div>
+        <button id="copyJoinLinkButton" class="secondary-action" type="button">Copy Join Link</button>
+        <button id="startRoundButton" class="primary-action" type="button">Start Round</button>
+        <button id="endGameButton" class="ghost-action" type="button">End Game</button>
+      </aside>
+
+      <section class="host-main">
+        <div class="panel host-status">
+          <div>
+            <p class="eyebrow">Current State</p>
+            <h2 id="hostPhaseText">Waiting for players</h2>
+          </div>
+          <div class="status-stack">
+            <div id="hostStagePill" class="stage-pill">Stage 1</div>
+            <div class="round-pill">Round <span id="hostRoundNow">1</span>/<span id="hostRoundTotal">5</span></div>
+          </div>
+        </div>
+
+        <div class="host-grid">
+          <div class="panel">
+            <p class="eyebrow">Players</p>
+            <div id="hostPlayers" class="score-rows"></div>
+          </div>
+          <div class="panel">
+            <p class="eyebrow">Question</p>
+            <div id="hostQuestion" class="host-question-box"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="playerRoomView" class="player-room hidden">
+      <div class="panel player-status">
+        <div>
+          <p class="eyebrow">Player</p>
+          <h2 id="playerStatusName">Player</h2>
+        </div>
+        <div class="status-stack">
+          <span id="playerRoomCode" class="mini-code">----</span>
+          <span id="playerPhaseText" class="phase-label">Waiting</span>
+        </div>
+      </div>
+
+      <div id="playerWaiting" class="panel waiting-card">
+        <p class="eyebrow">Lobby</p>
+        <h2>Waiting for the host</h2>
+        <div id="playerLobbyList" class="score-rows"></div>
+      </div>
+
+      <div id="playerGameArea" class="play-area hidden">
+        <div class="panel player-roundbar">
+          <div class="status-stack">
+            <div id="playerStagePill" class="stage-pill">Stage 1</div>
+            <div class="round-pill">Round <span id="playerRoundNow">1</span>/<span id="playerRoundTotal">5</span></div>
+          </div>
+          <div class="timer-badge"><span id="timerValue">0.0</span>s</div>
+        </div>
+        <div id="arena" class="arena" aria-label="Balloon board"></div>
+      </div>
+
+      <div id="playerQuestionCard" class="question-card panel hidden">
+        <p id="questionCategory" class="eyebrow">Category</p>
+        <h2 id="questionText">Question</h2>
+        <div id="answerGrid" class="answer-grid"></div>
+        <p id="answerFeedback" class="answer-feedback"></p>
+      </div>
+
+      <div id="playerResults" class="panel waiting-card hidden">
+        <p class="eyebrow">Round Complete</p>
+        <h2 id="playerResultsText">Waiting for the next round</h2>
+        <div id="playerScores" class="score-rows"></div>
+      </div>
+    </section>
+
+    <section id="finalView" class="final-view hidden">
+      <div class="panel final-card">
+        <p class="eyebrow">Final Results</p>
+        <h2 id="winnerText">Winner</h2>
+        <div id="finalScores" class="score-rows"></div>
+        <button id="playAgainButton" class="primary-action" type="button">Back Home</button>
+      </div>
+    </section>
+  </main>
+
+  <audio id="musicPlayer" loop></audio>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
