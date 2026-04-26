@@ -153,6 +153,7 @@ const stageColors = [
 
 const roomPrefix = "balloon-pop-room:";
 const channelName = "balloon-pop-trivia";
+const answerUnlockDelayMs = 2500;
 
 const firebaseConfig = {
   apiKey: "AIzaSyCSDbVolzRvoBhTHMEsoBS26XtmDVJPn8Q",
@@ -479,6 +480,7 @@ function completePlayerBoard() {
     room.roundWinnerId = player.id;
     room.phase = "question";
     room.question = drawQuestion(room);
+    room.question.unlockAt = Date.now() + answerUnlockDelayMs;
     const speedBonus = Math.max(5, Math.round(getDifficultyRules(room.difficulty).speedBonusBase - player.elapsed));
     player.score += speedBonus;
     player.speedBonus = speedBonus;
@@ -502,6 +504,11 @@ function answerQuestion(selectedIndex) {
   const room = session.room;
   if (!room || !room.question || room.question.answeredBy) return;
   if (room.roundWinnerId !== session.playerId) return;
+  if (room.question.unlockAt && Date.now() < room.question.unlockAt) {
+    const waitSeconds = Math.ceil((room.question.unlockAt - Date.now()) / 1000);
+    els.answerFeedback.textContent = `Get ready... ${waitSeconds}`;
+    return;
+  }
 
   const player = room.players[session.playerId];
   const question = getQuestion(room.question);
@@ -685,15 +692,31 @@ function renderQuestion(room) {
   const category = getCategory(room.question.categoryId);
   const question = getQuestion(room.question);
   const player = room.players[room.roundWinnerId];
+  const locked = room.question.unlockAt && Date.now() < room.question.unlockAt;
   els.questionCategory.textContent = `${category.name} / ${player.speedBonus || 0} speed bonus`;
-  els.questionText.textContent = question.q;
-  els.answerFeedback.textContent = "";
+  els.questionText.textContent = locked ? "Question incoming..." : question.q;
+  els.answerFeedback.textContent = locked ? "Hands off the screen. Answers unlock in a moment." : "Answer now";
+  els.answerGrid.classList.toggle("answers-locked", locked);
+  if (locked) {
+    els.answerGrid.innerHTML = `
+      <div class="reveal-countdown">
+        <strong>Get ready</strong>
+        <span>${Math.ceil((room.question.unlockAt - Date.now()) / 1000)}</span>
+      </div>
+    `;
+  } else {
   els.answerGrid.innerHTML = question.a.map((answer, index) => (
     `<button class="answer-btn" type="button" data-answer="${index}">${escapeHtml(answer)}</button>`
   )).join("");
   els.answerGrid.querySelectorAll(".answer-btn").forEach((button) => {
     button.addEventListener("click", () => answerQuestion(Number(button.dataset.answer)));
   });
+  }
+  if (locked) {
+    setTimeout(() => {
+      if (session.room && session.room.phase === "question") renderQuestion(session.room);
+    }, Math.max(50, room.question.unlockAt - Date.now()));
+  }
 }
 
 function renderFinal(room) {
