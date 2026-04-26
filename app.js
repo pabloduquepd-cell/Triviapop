@@ -394,7 +394,7 @@ async function joinRoom() {
       return;
     }
 
-    const room = await readRoom(roomCode);
+    const room = normalizeRoom(await readRoom(roomCode));
     if (!room) {
       els.joinError.textContent = "Room not found in Firebase. Make sure the host sees Firebase online and created the room from the live GitHub URL.";
       return;
@@ -534,7 +534,7 @@ function endGame() {
 
 async function loadRoomUpdate(roomFromFirebase) {
   if (!session.roomCode) return;
-  const room = roomFromFirebase || await readRoom(session.roomCode);
+  const room = normalizeRoom(roomFromFirebase || await readRoom(session.roomCode));
   if (!room) return;
   const previousPhase = session.room ? session.room.phase : "";
   const previousSeed = session.room ? session.room.roundSeed : "";
@@ -549,8 +549,9 @@ async function loadRoomUpdate(roomFromFirebase) {
 }
 
 function renderHost() {
-  const room = session.room;
+  const room = normalizeRoom(session.room);
   if (!room) return;
+  session.room = room;
 
   els.roomCodeDisplay.textContent = room.code;
   els.hostRoundNow.textContent = Math.max(1, room.round);
@@ -573,8 +574,9 @@ function renderHost() {
 }
 
 function renderPlayer() {
-  const room = session.room;
+  const room = normalizeRoom(session.room);
   if (!room) return;
+  session.room = room;
   const player = room.players[session.playerId];
   if (!player) {
     goHome();
@@ -816,13 +818,13 @@ async function readRoom(code) {
   if (realtimeDb) {
     const snap = await realtimeDb.ref(firebaseRoomPath(code)).once("value");
     if (snap.exists()) {
-      const room = snap.val();
+      const room = normalizeRoom(snap.val());
       localStorage.setItem(roomKey(code), JSON.stringify(room));
       return room;
     }
   }
   try {
-    return JSON.parse(localStorage.getItem(roomKey(code)));
+    return normalizeRoom(JSON.parse(localStorage.getItem(roomKey(code))));
   } catch {
     return null;
   }
@@ -833,7 +835,7 @@ function subscribeRoom(code) {
   unsubscribeRoom();
   session.roomListener = (snap) => {
     if (!snap.exists()) return;
-    const room = snap.val();
+    const room = normalizeRoom(snap.val());
     localStorage.setItem(roomKey(code), JSON.stringify(room));
     loadRoomUpdate(room);
   };
@@ -881,6 +883,19 @@ function roomKey(code) {
 
 function firebaseRoomPath(code) {
   return `rooms/${code}`;
+}
+
+function normalizeRoom(room) {
+  if (!room) return null;
+  room.players = room.players || {};
+  room.questionPool = room.questionPool || [];
+  room.phase = room.phase || "lobby";
+  room.round = Number(room.round || 0);
+  room.roundLimit = Number(room.roundLimit || 5);
+  room.balloonCount = Number(room.balloonCount || 12);
+  room.difficulty = room.difficulty || "medium";
+  room.categoryId = room.categoryId || "old-testament";
+  return room;
 }
 
 function sortedPlayers(room) {
