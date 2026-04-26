@@ -200,6 +200,8 @@ const els = {
   categoryChips: document.querySelector("#categoryChips"),
   difficultySelect: document.querySelector("#difficultySelect"),
   difficultyHint: document.querySelector("#difficultyHint"),
+  firebaseStatus: document.querySelector("#firebaseStatus"),
+  hostSetupError: document.querySelector("#hostSetupError"),
   balloonCount: document.querySelector("#balloonCount"),
   roundLimit: document.querySelector("#roundLimit"),
   createRoomButton: document.querySelector("#createRoomButton"),
@@ -249,6 +251,7 @@ const els = {
 function init() {
   renderCategoryControls();
   renderDifficultyHint();
+  updateFirebaseStatus();
   bindEvents();
   handleUrlJoin();
 }
@@ -333,6 +336,9 @@ function submitJoinOnEnter(event) {
 }
 
 async function createRoom() {
+  els.hostSetupError.textContent = "";
+  els.createRoomButton.disabled = true;
+  els.createRoomButton.textContent = "Creating Room...";
   const roomCode = makeRoomCode();
   const categoryId = els.categorySelect.value;
   const room = {
@@ -355,58 +361,77 @@ async function createRoom() {
   session.role = "host";
   session.roomCode = roomCode;
   session.room = room;
-  await saveRoom(room);
-  subscribeRoom(roomCode);
-  showOnly("hostRoomView");
-  renderHost();
+  try {
+    await saveRoom(room, { requireFirebase: true });
+    subscribeRoom(roomCode);
+    showOnly("hostRoomView");
+    renderHost();
+  } catch (error) {
+    session.role = "landing";
+    session.roomCode = "";
+    session.room = null;
+    els.hostSetupError.textContent = firebaseErrorMessage(error);
+  } finally {
+    els.createRoomButton.disabled = false;
+    els.createRoomButton.textContent = "Create Room";
+  }
 }
 
 async function joinRoom() {
   const roomCode = els.joinCodeInput.value.trim().toUpperCase();
   const playerName = els.playerNameInput.value.trim();
   els.joinError.textContent = "";
+  els.joinRoomButton.disabled = true;
+  els.joinRoomButton.textContent = "Joining...";
 
-  if (!roomCode || roomCode.length < 4) {
-    els.joinError.textContent = "Enter the room code from the host screen.";
-    return;
-  }
-  if (!playerName) {
-    els.joinError.textContent = "Enter your player name.";
-    return;
-  }
+  try {
+    if (!roomCode || roomCode.length < 4) {
+      els.joinError.textContent = "Enter the room code from the host screen.";
+      return;
+    }
+    if (!playerName) {
+      els.joinError.textContent = "Enter your player name.";
+      return;
+    }
 
-  const room = await readRoom(roomCode);
-  if (!room) {
-    els.joinError.textContent = "Room not found. Check the code with the host.";
-    return;
-  }
-  if (room.phase !== "lobby") {
-    els.joinError.textContent = "This room has already started.";
-    return;
-  }
+    const room = await readRoom(roomCode);
+    if (!room) {
+      els.joinError.textContent = "Room not found in Firebase. Make sure the host sees Firebase online and created the room from the live GitHub URL.";
+      return;
+    }
+    if (room.phase !== "lobby") {
+      els.joinError.textContent = "This room has already started. Ask the host to create a new room.";
+      return;
+    }
 
-  const playerId = session.playerId || makeId();
-  room.players[playerId] = {
-    id: playerId,
-    name: playerName,
-    score: 0,
-    finishedAt: 0,
-    elapsed: 0,
-    status: "ready",
-    answered: 0,
-    correct: 0
-  };
-  room.updatedAt = Date.now();
+    const playerId = session.playerId || makeId();
+    room.players[playerId] = {
+      id: playerId,
+      name: playerName,
+      score: 0,
+      finishedAt: 0,
+      elapsed: 0,
+      status: "ready",
+      answered: 0,
+      correct: 0
+    };
+    room.updatedAt = Date.now();
 
-  session.role = "player";
-  session.roomCode = roomCode;
-  session.playerId = playerId;
-  session.playerName = playerName;
-  session.room = room;
-  await saveRoom(room);
-  subscribeRoom(roomCode);
-  showOnly("playerRoomView");
-  renderPlayer();
+    session.role = "player";
+    session.roomCode = roomCode;
+    session.playerId = playerId;
+    session.playerName = playerName;
+    session.room = room;
+    await saveRoom(room, { requireFirebase: true });
+    subscribeRoom(roomCode);
+    showOnly("playerRoomView");
+    renderPlayer();
+  } catch (error) {
+    els.joinError.textContent = firebaseErrorMessage(error);
+  } finally {
+    els.joinRoomButton.disabled = false;
+    els.joinRoomButton.textContent = "Join Room";
+  }
 }
 
 function startRound() {
@@ -775,12 +800,14 @@ function goHome() {
   showOnly("landingView");
 }
 
-function saveRoom(room) {
+async function saveRoom(room, options = {}) {
   room.updatedAt = Date.now();
   session.room = room;
   localStorage.setItem(roomKey(room.code), JSON.stringify(room));
   if (realtimeDb) {
-    realtimeDb.ref(firebaseRoomPath(room.code)).set(room).catch(() => {});
+    await realtimeDb.ref(firebaseRoomPath(room.code)).set(room);
+  } else if (options.requireFirebase) {
+    throw new Error("Firebase is not loaded on this page.");
   }
   if (session.channel) session.channel.postMessage({ roomCode: room.code, updatedAt: room.updatedAt });
 }
@@ -811,6 +838,35 @@ function subscribeRoom(code) {
     loadRoomUpdate(room);
   };
   realtimeDb.ref(firebaseRoomPath(code)).on("value", session.roomListener);
+}
+
+function updateFirebaseStatus() {
+  if (!els.firebaseStatus) return;
+  if (!realtimeDb) {
+    els.firebaseStatus.textContent = "Firebase offline";
+    els.firebaseStatus.className = "connection-pill offline";
+    return;
+  }
+  els.firebaseStatus.textContent = "Firebase checking";
+  realtimeDb.ref(".info/connected").on("value", (snap) => {
+    const connected = snap.val() === true;
+    els.firebaseStatus.textContent = connected ? "Firebase online" : "Firebase reconnecting";
+    els.firebaseStatus.className = `connection-pill ${connected ? "online" : "offline"}`;
+  });
+}
+
+function firebaseErrorMessage(error) {
+  const message = error && error.message ? error.message : "Unknown Firebase error.";
+  if (message.toLowerCase().includes("permission")) {
+    return "Firebase denied the room write. Check Realtime Database rules and publish them.";
+  }
+  if (message.toLowerCase().includes("network")) {
+    return "Firebase network error. Check internet connection and reload.";
+  }
+  if (message.toLowerCase().includes("not loaded")) {
+    return "Firebase did not load. Make sure you are using the GitHub Pages URL, not an offline copy.";
+  }
+  return `Firebase error: ${message}`;
 }
 
 function unsubscribeRoom() {
